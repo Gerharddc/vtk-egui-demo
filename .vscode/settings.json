@@ -1,0 +1,6 @@
+{
+    "cmake.configureArgs": [
+        "-GNinja",
+        "-DVTK_DIR=C:\\Users\\gerha\\Projects\\vtk-msvc-static\\lib\\cmake\\vtk-9.5"
+    ]
+}
