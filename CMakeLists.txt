@@ -22,17 +22,14 @@ find_package(VTK
     RenderingOpenGL2
 )
 
-add_executable(vtk-egui-demo src/vtk_widget.cpp)
+add_library(vtk-egui-demo SHARED src/vtk_widget.cpp)
 
 target_include_directories(vtk-egui-demo PRIVATE include)
 
 target_link_libraries(vtk-egui-demo PRIVATE ${VTK_LIBRARIES})
 
-# Windows libraries for Rust
-target_link_libraries(vtk-egui-demo PRIVATE uxtheme Imm32 Dwmapi uiautomationcore oleaut32 propsys RuntimeObject Shlwapi)
-
 corrosion_import_crate(MANIFEST_PATH Cargo.toml)
-target_link_libraries(vtk-egui-demo PRIVATE rs_lib)
+corrosion_link_libraries(rs_lib vtk-egui-demo)
 
 vtk_module_autoinit(
     TARGETS vtk-egui-demo

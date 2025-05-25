@@ -5,10 +5,7 @@ use eframe::{egui, glow};
 mod vtk_widget;
 use vtk_widget::VtkWidget;
 
-// We need to do this weirdness since rustc thinks it's building a library due to use needing
-// to use the C++ linker to link our final app binary.
-#[unsafe(no_mangle)]
-pub extern "C" fn main() -> i32 {
+fn main() {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([350.0, 380.0]),
@@ -22,7 +19,6 @@ pub extern "C" fn main() -> i32 {
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
     .unwrap();
-    0
 }
 
 struct MyApp {

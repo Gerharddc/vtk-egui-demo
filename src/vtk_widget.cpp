@@ -40,13 +40,14 @@ namespace
     {
         assert(repaint_requester != nullptr);
         is_dirty = true;
-        eframe_request_repaint(repaint_requester);
+        //eframe_request_repaint(repaint_requester);
     }
 
     GLADapiproc gl_get_proc_address(const char *name)
     {
         assert(gl_loader != nullptr);
-        return static_cast<GLADapiproc>(eframe_gl_loader_get_proc_address(gl_loader, name));
+        //return static_cast<GLADapiproc>(eframe_gl_loader_get_proc_address(gl_loader, name));
+        return nullptr;
     }
 } // end anon namespace
 

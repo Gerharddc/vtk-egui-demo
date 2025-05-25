@@ -3,9 +3,9 @@ name = "rs-lib"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
+[[bin]]
 name = "rs_lib"
-crate-type = ["staticlib"]
+path = "src/main.rs"
 
 [dependencies]
 eframe = "0.31.1"

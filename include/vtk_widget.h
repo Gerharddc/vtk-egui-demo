@@ -4,9 +4,9 @@ extern "C"
 #endif
     // Functions defined in Rust
     struct EframeGlLoader;
-    extern void *eframe_gl_loader_get_proc_address(const struct EframeGlLoader *loader, const char *name);
+    //extern void *eframe_gl_loader_get_proc_address(const struct EframeGlLoader *loader, const char *name);
     struct EframeRepaintRequester;
-    extern void eframe_request_repaint(const struct EframeRepaintRequester *requester);
+    //extern void eframe_request_repaint(const struct EframeRepaintRequester *requester);
 
     // Functions defined in C++
     void vtk_load_gl(const struct EframeGlLoader *loader);
