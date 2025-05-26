@@ -27,4 +27,14 @@ You can then change to the source dir for this project and build it as follows:
 
 If you are using vscode, you can also update `.vscode/settings.json` to update VTK_DIR to the directory where you installed VTK on your own system.
 
-Unfortunately I don't currently have time to implement feature requests, fix bugs, help out with compiler issues etc. but please feel free to sumbit PRs if you find ways to improve upon this integration!
+Unfortunately I don't currently have time to implement feature requests, fix bugs, help out with compiler issues etc. but please feel free to sumbit PRs if you want to help improve this integration!
+
+## TODO list:
+
+- [ ] Get resize working for the VTK widget
+- [ ] Refactor the C++ code to encapsulate state in a class rather than just having it "floating"
+- [ ] Abstract the VTK+eframe integration into a base class that custom widgets can inherit from
+- [ ] Figure out how to handle HiDPI rendering properly for VTK widgets
+- [ ] Add Linux support
+- [ ] Add Mac support
+- [ ] Add WebGPU support
