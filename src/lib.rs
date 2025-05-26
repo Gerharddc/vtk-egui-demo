@@ -60,7 +60,8 @@ impl eframe::App for MyApp {
                 self.vtk_widget.width() as f32,
                 self.vtk_widget.height() as f32,
             ],
-        ));
+        ))
+        .maintain_aspect_ratio(false);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -70,11 +71,11 @@ impl eframe::App for MyApp {
                 ui.label(" (in C++).");
             });
 
-            egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                self.vtk_widget.show(ui, vtk_img);
-            });
-
             ui.label("Drag to rotate, wheel to zoom!");
+
+            egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                self.vtk_widget.show(ui, vtk_img.shrink_to_fit());
+            });
         });
     }
 

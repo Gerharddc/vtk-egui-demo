@@ -131,9 +131,11 @@ void vtk_paint()
     is_dirty = false;
 }
 
-bool vtk_is_dirty()
+void vtk_read_state(bool *is_dirty_out, int *width_out, int *height_out)
 {
-    return is_dirty;
+    *is_dirty_out = is_dirty;
+    *width_out = window_width;
+    *height_out = window_height;
 }
 
 void vtk_mouse_move(int x, int y)
@@ -194,14 +196,15 @@ void vtk_mouse_wheel(int delta)
 
 void vtk_set_size(int width, int height)
 {
+    if (window_width == width && window_height == height)
+    {
+        return;
+    }
+
     assert(render_window != nullptr);
+    render_window->SetSize(width, height);
 
     window_width = width;
     window_height = height;
-    render_window->SetSize(width, height);
-
-    if (interactor)
-    {
-        interactor->SetSize(width, height);
-    }
+    is_dirty = true;
 }

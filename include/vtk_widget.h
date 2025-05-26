@@ -13,7 +13,7 @@ extern "C"
     void vtk_new(int width, int height, const struct EframeRepaintRequester *requester);
     void vtk_destroy();
     void vtk_paint();
-    bool vtk_is_dirty();
+    void vtk_read_state(bool *is_dirty, int *width, int *height);
     void vtk_mouse_move(int x, int y);
     void vtk_update_mouse_down(bool primary, bool secondary, bool middle);
     void vtk_mouse_wheel(int delta);

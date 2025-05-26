@@ -31,7 +31,7 @@ Unfortunately I don't currently have time to implement feature requests, fix bug
 
 ## TODO list:
 
-- [ ] Get resize working for the VTK widget
+- [x] Get resize working for the VTK widget
 - [ ] Forward keyboard events from eframe to VTK
 - [ ] Refactor the C++ code to encapsulate state in a class rather than just having it "floating"
 - [ ] Abstract the VTK+eframe integration into a base class that custom widgets can inherit from

@@ -9,7 +9,7 @@ unsafe extern "C" {
     fn vtk_new(width: i32, height: i32, requester: *const EframeRepaintRequester);
     fn vtk_destroy();
     fn vtk_paint();
-    fn vtk_is_dirty() -> bool;
+    fn vtk_read_state(is_dirty: *mut bool, width: *mut i32, height: *mut i32);
     fn vtk_mouse_move(x: i32, y: i32);
     fn vtk_update_mouse_down(primary: bool, secondary: bool, middle: bool);
     fn vtk_mouse_wheel(delta: i32);
@@ -128,13 +128,39 @@ impl VtkWidget {
         }
     }
 
-    pub fn paint_if_dirty(&self, gl: &glow::Context) {
+    pub fn paint_if_dirty(&mut self, gl: &glow::Context) {
         use glow::HasContext as _;
 
+        let mut is_dirty = false;
+        let mut width = 0;
+        let mut height = 0;
+
         unsafe {
-            if vtk_is_dirty() {
+            vtk_read_state(&mut is_dirty, &mut width, &mut height);
+
+            if is_dirty {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+
+                if width != self.width || height != self.height {
+                    gl.bind_texture(glow::TEXTURE_2D, Some(self.texture));
+                    gl.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA8 as i32,
+                        width,
+                        height,
+                        0,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelUnpackData::Slice(None),
+                    );
+                    gl.bind_texture(glow::TEXTURE_2D, None);
+                    self.width = width;
+                    self.height = height;
+                }
+
                 vtk_paint();
+
                 gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             }
         }
@@ -162,14 +188,8 @@ impl VtkWidget {
         let width = current_size.x as i32;
         let height = current_size.y as i32;
 
-        if width != self.width || height != self.height {
-            println!("Updating size: {:#?}", current_size);
-
-            unsafe {
-                vtk_set_size(width, height);
-            }
-            self.width = width;
-            self.height = height;
+        unsafe {
+            vtk_set_size(width, height);
         }
 
         if response.hovered() {
