@@ -48,21 +48,6 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        use egui::load::SizedTexture;
-
-        self.vtk_widget.paint_if_dirty(frame.gl().unwrap());
-
-        // TODO: think how DPI should affect the actual texture size
-
-        let vtk_img = egui::Image::from_texture(SizedTexture::new(
-            self.vtk_widget.texture_id(frame),
-            [
-                self.vtk_widget.width() as f32,
-                self.vtk_widget.height() as f32,
-            ],
-        ))
-        .maintain_aspect_ratio(false);
-
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -71,10 +56,16 @@ impl eframe::App for MyApp {
                 ui.label(" (in C++).");
             });
 
-            ui.label("Drag to rotate, wheel to zoom!");
+            ui.horizontal(|ui| {
+                ui.label("Drag to rotate, wheel to zoom!");
+
+                if ui.button("Reset Camera").clicked() {
+                    self.vtk_widget.reset_camera();
+                }
+            });
 
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                self.vtk_widget.show(ui, vtk_img.shrink_to_fit());
+                self.vtk_widget.show(ui, ctx, frame);
             });
         });
     }

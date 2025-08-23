@@ -1,19 +1,37 @@
-use eframe::{egui, glow};
+use eframe::{egui, emath, glow};
 use std::ffi::CStr;
 use std::{ffi::c_void, os::raw::c_char};
+
+pub struct VtkWidgetCpp;
 
 #[allow(improper_ctypes)]
 #[link(name = "vtk-egui-demo")]
 unsafe extern "C" {
-    fn vtk_load_gl(loader: *const EframeGlLoader<'_>);
-    fn vtk_new(width: i32, height: i32, requester: *const EframeRepaintRequester);
-    fn vtk_destroy();
-    fn vtk_paint();
-    fn vtk_read_state(is_dirty: *mut bool, width: *mut i32, height: *mut i32);
-    fn vtk_mouse_move(x: i32, y: i32);
-    fn vtk_update_mouse_down(primary: bool, secondary: bool, middle: bool);
-    fn vtk_mouse_wheel(delta: i32);
-    fn vtk_set_size(width: i32, height: i32);
+    fn vtk_eframe_load_gl(loader: *const EframeGlLoader<'_>);
+    fn vtk_widget_new(
+        width: i32,
+        height: i32,
+        requester: *const EframeRepaintRequester,
+    ) -> *mut VtkWidgetCpp;
+    fn vtk_widget_delete(cpp_self: *mut VtkWidgetCpp);
+    fn vtk_widget_paint(cpp_self: *mut VtkWidgetCpp);
+    fn vtk_widget_read_state(
+        cpp_self: *mut VtkWidgetCpp,
+        needs_repaint: *mut bool,
+        width: *mut i32,
+        height: *mut i32,
+    );
+    fn vtk_widget_mouse_move(cpp_self: *mut VtkWidgetCpp, x: i32, y: i32);
+    fn vtk_widget_mouse_down(
+        cpp_self: *mut VtkWidgetCpp,
+        primary: bool,
+        secondary: bool,
+        middle: bool,
+    );
+    fn vtk_widget_mouse_wheel(cpp_self: *mut VtkWidgetCpp, delta: i32);
+    fn vtk_widget_set_size(cpp_self: *mut VtkWidgetCpp, width: i32, height: i32);
+    fn vtk_widget_reset_camera(cpp_self: *mut VtkWidgetCpp);
+    fn vtk_widget_repaint(cpp_self: *mut VtkWidgetCpp);
 }
 
 pub struct EframeRepaintRequester(egui::Context);
@@ -30,6 +48,9 @@ pub struct VtkWidget {
     width: i32,
     height: i32,
     egui_texture_id: Option<egui::TextureId>,
+    cpp_self: *mut VtkWidgetCpp,
+
+    // We need to hold onto this to prevent it from being de-allocated (C++ holds a reference)
     _repaint_requester: Box<EframeRepaintRequester>,
 }
 
@@ -47,6 +68,12 @@ pub extern "C" fn eframe_gl_loader_get_proc_address(
     (loader.get_proc_address)(name)
 }
 
+// VTK uses an inverse y coordinate system
+const VTK_IMG_UV: emath::Rect = emath::Rect {
+    min: egui::Pos2 { x: 0.0, y: 1.0 },
+    max: egui::Pos2 { x: 1.0, y: 0.0 },
+};
+
 impl VtkWidget {
     pub fn new(
         gl: &glow::Context,
@@ -55,15 +82,17 @@ impl VtkWidget {
     ) -> Self {
         use glow::HasContext as _;
 
-        let width = 300;
-        let height = 300;
+        // TODO: find a better solution for this. Perhaps we need to just drop the first frame?
+        let initial_width = 300;
+        let initial_height = 300;
 
         let gl_loader = EframeGlLoader { get_proc_address };
         let repaint_requester = Box::new(EframeRepaintRequester(ctx.clone()));
 
         unsafe {
-            vtk_load_gl(&gl_loader);
-            vtk_new(width, height, &*repaint_requester);
+            vtk_eframe_load_gl(&gl_loader);
+
+            let vtk_widget_cpp = vtk_widget_new(initial_width, initial_height, &*repaint_requester);
 
             let fbo = gl.create_framebuffer().unwrap();
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
@@ -73,9 +102,9 @@ impl VtkWidget {
             gl.tex_image_2d(
                 glow::TEXTURE_2D,
                 0,
-                glow::RGBA as i32,
-                width,
-                height,
+                glow::RGBA8 as i32,
+                initial_width,
+                initial_height,
                 0,
                 glow::RGBA,
                 glow::UNSIGNED_BYTE,
@@ -109,9 +138,10 @@ impl VtkWidget {
             VtkWidget {
                 fbo,
                 texture,
-                width,
-                height,
+                width: initial_width,
+                height: initial_height,
                 egui_texture_id: None,
+                cpp_self: vtk_widget_cpp,
                 _repaint_requester: repaint_requester,
             }
         }
@@ -122,23 +152,23 @@ impl VtkWidget {
         use glow::HasContext as _;
 
         unsafe {
-            vtk_destroy();
+            vtk_widget_delete(self.cpp_self);
             gl.delete_framebuffer(self.fbo);
             gl.delete_texture(self.texture);
         }
     }
 
-    pub fn paint_if_dirty(&mut self, gl: &glow::Context) {
+    fn paint_if_needed(&mut self, gl: &glow::Context) {
         use glow::HasContext as _;
 
-        let mut is_dirty = false;
+        let mut needs_repaint = false;
         let mut width = 0;
         let mut height = 0;
 
         unsafe {
-            vtk_read_state(&mut is_dirty, &mut width, &mut height);
+            vtk_widget_read_state(self.cpp_self, &mut needs_repaint, &mut width, &mut height);
 
-            if is_dirty {
+            if needs_repaint {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
 
                 if width != self.width || height != self.height {
@@ -159,38 +189,40 @@ impl VtkWidget {
                     self.height = height;
                 }
 
-                vtk_paint();
+                vtk_widget_paint(self.cpp_self);
 
                 gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             }
         }
     }
 
-    pub fn width(&self) -> i32 {
-        self.width
-    }
+    fn vtk_img(&mut self, frame: &mut eframe::Frame) -> egui::widgets::Image<'_> {
+        use egui::load::SizedTexture;
 
-    pub fn height(&self) -> i32 {
-        self.height
-    }
+        self.paint_if_needed(frame.gl().unwrap());
 
-    pub fn texture_id(&mut self, frame: &mut eframe::Frame) -> egui::TextureId {
         // We are handing over ownership of the texture so should take care not to delete it
-        *self
+        let texture_id = *self
             .egui_texture_id
-            .get_or_insert(frame.register_native_glow_texture(self.texture))
+            .get_or_insert(frame.register_native_glow_texture(self.texture));
+
+        egui::Image::from_texture(SizedTexture::new(
+            texture_id,
+            [self.width as f32, self.height as f32],
+        ))
+        .maintain_aspect_ratio(false)
+        .shrink_to_fit()
+        .uv(VTK_IMG_UV)
+        .sense(egui::Sense::all())
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, vtk_img: egui::Image) {
-        let response = ui.add(vtk_img.sense(egui::Sense::all()));
-
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let response = ui.add(self.vtk_img(frame));
         let current_size = response.rect.size();
-        let width = current_size.x as i32;
-        let height = current_size.y as i32;
-
-        unsafe {
-            vtk_set_size(width, height);
-        }
+        let ppp = ctx.pixels_per_point();
+        let new_width = (current_size.x * ppp) as i32;
+        let new_height = (current_size.y * ppp) as i32;
+        unsafe { vtk_widget_set_size(self.cpp_self, new_width, new_height) };
 
         if response.hovered() {
             if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
@@ -200,15 +232,14 @@ impl VtkWidget {
                 let y = relative_pos.y as i32;
 
                 unsafe {
-                    vtk_mouse_move(x, y);
+                    // VTK uses an inverse y coordinate system
+                    vtk_widget_mouse_move(self.cpp_self, x, new_height - y);
                 }
             }
 
             let scroll_delta = ui.input(|i| i.raw_scroll_delta.y as i32);
             if scroll_delta != 0 {
-                unsafe {
-                    vtk_mouse_wheel(scroll_delta);
-                }
+                unsafe { vtk_widget_mouse_wheel(self.cpp_self, scroll_delta) };
             }
 
             let (primary, secondary, middle) = ui.input(|i| {
@@ -219,7 +250,16 @@ impl VtkWidget {
                 )
             });
 
-            unsafe { vtk_update_mouse_down(primary, secondary, middle) };
+            unsafe { vtk_widget_mouse_down(self.cpp_self, primary, secondary, middle) };
         }
+    }
+
+    pub fn repaint(&mut self) {
+        unsafe { vtk_widget_repaint(self.cpp_self) };
+    }
+
+    pub fn reset_camera(&mut self) {
+        unsafe { vtk_widget_reset_camera(self.cpp_self) };
+        self.repaint();
     }
 }

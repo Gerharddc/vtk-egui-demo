@@ -2,30 +2,40 @@
 #include <vtkCallbackCommand.h>
 #include <vtkCamera.h>
 #include <vtkCubeSource.h>
+#include <vtkFileOutputWindow.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkGenericRenderWindowInteractor.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkLogger.h>
 #include <vtkNew.h>
+#include <vtkOutputWindow.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
-#include <vtkRenderer.h>
 #include <vtk_glad.h>
 
 #include "vtk_widget.h"
 
-namespace {
-const EframeGlLoader *gl_loader = nullptr;
-const EframeRepaintRequester *repaint_requester = nullptr;
-vtkGenericOpenGLRenderWindow *render_window = nullptr;
-vtkGenericRenderWindowInteractor *interactor = nullptr;
+struct VtkWidgetCpp {
+    const EframeRepaintRequester *m_repaint_requester;
+    int m_width, m_height;
 
+    vtkNew<vtkRenderer> m_renderer;
+    vtkNew<vtkGenericOpenGLRenderWindow> m_render_window;
+    vtkNew<vtkGenericRenderWindowInteractor> m_interactor;
+
+    bool m_needs_repaint = true;
+    bool m_primary_down = false;
+    bool m_secondary_down = false;
+    bool m_middle_down = false;
+
+    VtkWidgetCpp(int width, int height, const EframeRepaintRequester *requester)
+        : m_width{width}, m_height{height}, m_repaint_requester{requester} {}
+};
+
+namespace {
+// TODO: we probably want to do this GL stuff in a different "class"
+const EframeGlLoader *gl_loader = nullptr;
 bool gl_loaded = false;
-bool is_dirty = true;
-bool primary_down = false;
-bool secondary_down = false;
-bool middle_down = false;
-int window_width, window_height;
 
 void IsCurrentCallback(vtkObject *vtkNotUsed(caller),
                        long unsigned int vtkNotUsed(eventId),
@@ -36,11 +46,13 @@ void IsCurrentCallback(vtkObject *vtkNotUsed(caller),
 }
 
 void FrameCallback(vtkObject *vtkNotUsed(caller),
-                   long unsigned int vtkNotUsed(eventId),
-                   void *vtkNotUsed(clientData), void *vtkNotUsed(callData)) {
-    assert(repaint_requester != nullptr);
-    is_dirty = true;
-    eframe_request_repaint(repaint_requester);
+                   long unsigned int vtkNotUsed(eventId), void *clientData,
+                   void *vtkNotUsed(callData)) {
+    VtkWidgetCpp *widget = static_cast<VtkWidgetCpp *>(clientData);
+
+    assert(widget->m_repaint_requester != nullptr);
+    widget->m_needs_repaint = true;
+    eframe_request_repaint(widget->m_repaint_requester);
 }
 
 GLADapiproc gl_get_proc_address(const char *name) {
@@ -50,51 +62,57 @@ GLADapiproc gl_get_proc_address(const char *name) {
 }
 } // namespace
 
-void vtk_load_gl(const EframeGlLoader *loader) {
+void vtk_eframe_load_gl(const EframeGlLoader *loader) {
+    if (gl_loaded) {
+        std::cout << "OpenGL alread loaded. Skipping.\n";
+        return;
+    }
+
     gl_loader = loader;
     gladLoadGL(&gl_get_proc_address);
 
     // The loader has a limited lifetime so we need to discard our pointer
     gl_loader = nullptr;
     gl_loaded = true;
+
+    // Or redirect to your own logging system
+    vtkNew<vtkFileOutputWindow> fileOutputWindow;
+    fileOutputWindow->SetFileName("vtk_output.log");
+    vtkOutputWindow::SetInstance(fileOutputWindow);
 }
 
-void vtk_new(int width, int height, const EframeRepaintRequester *requester) {
+VtkWidgetCpp *vtk_widget_new(int width, int height,
+                             const EframeRepaintRequester *requester) {
     vtkLogScopeFunction(INFO);
     vtkLogScopeF(INFO, "do-vtk-new");
 
     assert(gl_loaded);
 
-    window_width = width;
-    window_height = height;
-    repaint_requester = requester;
+    auto self = new VtkWidgetCpp(width, height, requester);
 
-    vtkNew<vtkRenderer> renderer;
-    renderer->ResetCamera();
-    renderer->SetAutomaticLightCreation(true);
+    self->m_renderer->ResetCamera();
+    self->m_renderer->SetAutomaticLightCreation(true);
 
-    assert(render_window == nullptr);
-    render_window = vtkGenericOpenGLRenderWindow::New();
-    render_window->AddRenderer(renderer);
-    render_window->SetSize(width, height);
+    self->m_render_window->AddRenderer(self->m_renderer);
+    self->m_render_window->SetSize(width, height);
 
     vtkNew<vtkCallbackCommand> is_current_cb;
     is_current_cb->SetCallback(IsCurrentCallback);
-    render_window->AddObserver(vtkCommand::WindowIsCurrentEvent, is_current_cb);
+    self->m_render_window->AddObserver(vtkCommand::WindowIsCurrentEvent,
+                                       is_current_cb);
 
     vtkNew<vtkCallbackCommand> frame_cb;
     frame_cb->SetCallback(FrameCallback);
-    render_window->AddObserver(vtkCommand::WindowFrameEvent, frame_cb);
+    frame_cb->SetClientData(self);
+    self->m_render_window->AddObserver(vtkCommand::WindowFrameEvent, frame_cb);
 
-    assert(interactor == nullptr);
-    interactor = vtkGenericRenderWindowInteractor::New();
-    interactor->SetRenderWindow(render_window);
+    self->m_interactor->SetRenderWindow(self->m_render_window);
 
     vtkNew<vtkInteractorStyleTrackballCamera> style;
-    interactor->SetInteractorStyle(style);
+    self->m_interactor->SetInteractorStyle(style);
 
     vtkNew<vtkActor> actor;
-    renderer->AddActor(actor);
+    self->m_renderer->AddActor(actor);
     actor->RotateX(45.0);
     actor->RotateY(45.0);
     actor->GetProperty()->SetColor(0.8, 0.2, 0.2);
@@ -104,91 +122,106 @@ void vtk_new(int width, int height, const EframeRepaintRequester *requester) {
 
     vtkNew<vtkCubeSource> cs;
     mapper->SetInputConnection(cs->GetOutputPort());
+
+    return self;
 }
 
-void vtk_destroy() {
-    assert(interactor != nullptr);
-    assert(render_window != nullptr);
-
-    interactor->Delete();
-    render_window->Delete();
-
-    interactor = nullptr;
-    render_window = nullptr;
-    repaint_requester = nullptr;
+void vtk_widget_delete(VtkWidgetCpp *self) {
+    assert(self != nullptr);
+    delete self;
 }
 
-void vtk_paint() {
+vtkRenderer *vtk_widget_renderer(VtkWidgetCpp *self) {
+    return self->m_renderer;
+}
+
+void vtk_widget_paint(VtkWidgetCpp *self) {
     vtkLogScopeFunction(INFO);
     vtkLogScopeF(INFO, "do-vtk-render");
 
-    assert(render_window != nullptr);
-    render_window->Render();
-    is_dirty = false;
+    self->m_render_window->Render();
+    self->m_needs_repaint = false;
 }
 
-void vtk_read_state(bool *is_dirty_out, int *width_out, int *height_out) {
-    *is_dirty_out = is_dirty;
-    *width_out = window_width;
-    *height_out = window_height;
+void vtk_widget_read_state(VtkWidgetCpp *self, bool *needs_repaint_out,
+                           int *width_out, int *height_out) {
+    *needs_repaint_out = self->m_needs_repaint;
+    *width_out = self->m_width;
+    *height_out = self->m_height;
 }
 
-void vtk_mouse_move(int x, int y) {
-    assert(interactor != nullptr);
-    interactor->SetEventPosition(x, y);
-    interactor->InvokeEvent(vtkCommand::MouseMoveEvent);
+void vtk_widget_mouse_move(VtkWidgetCpp *self, int x, int y) {
+    self->m_interactor->SetEventPosition(x, y);
+    self->m_interactor->InvokeEvent(vtkCommand::MouseMoveEvent);
 }
 
-void vtk_update_mouse_down(bool primary, bool secondary, bool middle) {
-    assert(interactor != nullptr);
-
-    if (primary_down != primary) {
+void vtk_widget_mouse_down(VtkWidgetCpp *self, bool primary, bool secondary,
+                           bool middle) {
+    if (self->m_primary_down != primary) {
         if (primary)
-            interactor->InvokeEvent(vtkCommand::LeftButtonPressEvent);
+            self->m_interactor->InvokeEvent(vtkCommand::LeftButtonPressEvent);
         else
-            interactor->InvokeEvent(vtkCommand::LeftButtonReleaseEvent);
+            self->m_interactor->InvokeEvent(vtkCommand::LeftButtonReleaseEvent);
 
-        primary_down = primary;
+        self->m_primary_down = primary;
     }
 
-    if (secondary_down != secondary) {
+    if (self->m_secondary_down != secondary) {
         if (secondary)
-            interactor->InvokeEvent(vtkCommand::RightButtonPressEvent);
+            self->m_interactor->InvokeEvent(vtkCommand::RightButtonPressEvent);
         else
-            interactor->InvokeEvent(vtkCommand::RightButtonReleaseEvent);
+            self->m_interactor->InvokeEvent(
+                vtkCommand::RightButtonReleaseEvent);
 
-        secondary_down = secondary;
+        self->m_secondary_down = secondary;
     }
 
-    if (middle_down != middle) {
+    if (self->m_middle_down != middle) {
         if (middle)
-            interactor->InvokeEvent(vtkCommand::MiddleButtonPressEvent);
+            self->m_interactor->InvokeEvent(vtkCommand::MiddleButtonPressEvent);
         else
-            interactor->InvokeEvent(vtkCommand::MiddleButtonReleaseEvent);
+            self->m_interactor->InvokeEvent(
+                vtkCommand::MiddleButtonReleaseEvent);
 
-        middle_down = middle;
+        self->m_middle_down = middle;
     }
 }
 
-void vtk_mouse_wheel(int delta) {
-    assert(interactor != nullptr);
-
+void vtk_widget_mouse_wheel(VtkWidgetCpp *self, int delta) {
     if (delta > 0) {
-        interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
+        self->m_interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
     } else if (delta < 0) {
-        interactor->InvokeEvent(vtkCommand::MouseWheelBackwardEvent);
+        self->m_interactor->InvokeEvent(vtkCommand::MouseWheelBackwardEvent);
     }
 }
 
-void vtk_set_size(int width, int height) {
-    if (window_width == width && window_height == height) {
+void vtk_widget_set_size(VtkWidgetCpp *self, int width, int height) {
+    if (self->m_width == width && self->m_height == height) {
         return;
     }
 
-    assert(render_window != nullptr);
-    render_window->SetSize(width, height);
+    self->m_render_window->SetSize(width, height);
 
-    window_width = width;
-    window_height = height;
-    is_dirty = true;
+    self->m_width = width;
+    self->m_height = height;
+    self->m_needs_repaint = true;
+}
+
+void vtk_widget_reset_camera(VtkWidgetCpp *self) {
+    auto camera = self->m_renderer->GetActiveCamera();
+
+    // Reset camera to default position and orientation
+    camera->SetPosition(0, 0, 1);
+    camera->SetFocalPoint(0, 0, 0);
+    camera->SetViewUp(0, 1, 0);
+
+    // Reset the camera to fit the scene
+    self->m_renderer->ResetCamera();
+
+    vtk_widget_repaint(self);
+}
+
+void vtk_widget_repaint(VtkWidgetCpp *self) {
+    self->m_needs_repaint = true;
+    eframe_request_repaint(self->m_repaint_requester);
 }

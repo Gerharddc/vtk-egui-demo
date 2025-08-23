@@ -32,11 +32,11 @@ Unfortunately I don't currently have time to implement feature requests, fix bug
 ## TODO list:
 
 - [x] Get resize working for the VTK widget
-- [ ] Correct VTK widget being vertically upside down
-- [ ] Forward keyboard events from eframe to VTK
-- [ ] Refactor the C++ code to encapsulate state in a class rather than just having it "floating"
-- [ ] Abstract the VTK+eframe integration into a base class that custom widgets can inherit from
-- [ ] Figure out how to handle HiDPI rendering properly for VTK widgets
+- [x] Correct VTK widget being vertically upside down
+- [x] Refactor the C++ code to encapsulate state in a class rather than just having it "floating"
+- [x] Figure out how to handle HiDPI rendering properly for VTK widgets
+- [x] Implement VTK widget resizing
 - [x] Add Linux support
+- [ ] Forward keyboard events from eframe to VTK
 - [ ] Add Mac support
 - [ ] Add WebGPU support
