@@ -35,7 +35,6 @@ Unfortunately I don't currently have time to implement feature requests, fix bug
 - [x] Correct VTK widget being vertically upside down
 - [x] Refactor the C++ code to encapsulate state in a class rather than just having it "floating"
 - [x] Figure out how to handle HiDPI rendering properly for VTK widgets
-- [x] Implement VTK widget resizing
 - [x] Add Linux support
 - [ ] Forward keyboard events from eframe to VTK
 - [ ] Add Mac support
