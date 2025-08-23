@@ -1,57 +1,56 @@
-#include <vtk_glad.h>
 #include <vtkActor.h>
 #include <vtkCallbackCommand.h>
 #include <vtkCamera.h>
 #include <vtkCubeSource.h>
+#include <vtkGenericOpenGLRenderWindow.h>
+#include <vtkGenericRenderWindowInteractor.h>
+#include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkLogger.h>
 #include <vtkNew.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
-#include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkRenderer.h>
-#include <vtkGenericRenderWindowInteractor.h>
-#include <vtkInteractorStyleTrackballCamera.h>
+#include <vtk_glad.h>
 
 #include "vtk_widget.h"
 
-namespace
-{
-    const EframeGlLoader *gl_loader = nullptr;
-    const EframeRepaintRequester *repaint_requester = nullptr;
-    vtkGenericOpenGLRenderWindow *render_window = nullptr;
-    vtkGenericRenderWindowInteractor *interactor = nullptr;
+namespace {
+const EframeGlLoader *gl_loader = nullptr;
+const EframeRepaintRequester *repaint_requester = nullptr;
+vtkGenericOpenGLRenderWindow *render_window = nullptr;
+vtkGenericRenderWindowInteractor *interactor = nullptr;
 
-    bool gl_loaded = false;
-    bool is_dirty = true;
-    bool primary_down = false;
-    bool secondary_down = false;
-    bool middle_down = false;
-    int window_width, window_height;
+bool gl_loaded = false;
+bool is_dirty = true;
+bool primary_down = false;
+bool secondary_down = false;
+bool middle_down = false;
+int window_width, window_height;
 
-    void IsCurrentCallback(vtkObject *vtkNotUsed(caller), long unsigned int vtkNotUsed(eventId),
-                           void *vtkNotUsed(clientData), void *callData)
-    {
-        // We always make sure to have the context for VTK active before calling render on it
-        *(static_cast<bool *>(callData)) = true;
-    }
+void IsCurrentCallback(vtkObject *vtkNotUsed(caller),
+                       long unsigned int vtkNotUsed(eventId),
+                       void *vtkNotUsed(clientData), void *callData) {
+    // We always make sure to have the context for VTK active before calling
+    // render on it
+    *(static_cast<bool *>(callData)) = true;
+}
 
-    void FrameCallback(vtkObject *vtkNotUsed(caller), long unsigned int vtkNotUsed(eventId),
-                       void *vtkNotUsed(clientData), void *vtkNotUsed(callData))
-    {
-        assert(repaint_requester != nullptr);
-        is_dirty = true;
-        eframe_request_repaint(repaint_requester);
-    }
+void FrameCallback(vtkObject *vtkNotUsed(caller),
+                   long unsigned int vtkNotUsed(eventId),
+                   void *vtkNotUsed(clientData), void *vtkNotUsed(callData)) {
+    assert(repaint_requester != nullptr);
+    is_dirty = true;
+    eframe_request_repaint(repaint_requester);
+}
 
-    GLADapiproc gl_get_proc_address(const char *name)
-    {
-        assert(gl_loader != nullptr);
-        return reinterpret_cast<GLADapiproc>(eframe_gl_loader_get_proc_address(gl_loader, name));
-    }
-} // end anon namespace
+GLADapiproc gl_get_proc_address(const char *name) {
+    assert(gl_loader != nullptr);
+    return reinterpret_cast<GLADapiproc>(
+        eframe_gl_loader_get_proc_address(gl_loader, name));
+}
+} // namespace
 
-void vtk_load_gl(const EframeGlLoader *loader)
-{
+void vtk_load_gl(const EframeGlLoader *loader) {
     gl_loader = loader;
     gladLoadGL(&gl_get_proc_address);
 
@@ -60,8 +59,7 @@ void vtk_load_gl(const EframeGlLoader *loader)
     gl_loaded = true;
 }
 
-void vtk_new(int width, int height, const EframeRepaintRequester *requester)
-{
+void vtk_new(int width, int height, const EframeRepaintRequester *requester) {
     vtkLogScopeFunction(INFO);
     vtkLogScopeF(INFO, "do-vtk-new");
 
@@ -108,8 +106,7 @@ void vtk_new(int width, int height, const EframeRepaintRequester *requester)
     mapper->SetInputConnection(cs->GetOutputPort());
 }
 
-void vtk_destroy()
-{
+void vtk_destroy() {
     assert(interactor != nullptr);
     assert(render_window != nullptr);
 
@@ -121,8 +118,7 @@ void vtk_destroy()
     repaint_requester = nullptr;
 }
 
-void vtk_paint()
-{
+void vtk_paint() {
     vtkLogScopeFunction(INFO);
     vtkLogScopeF(INFO, "do-vtk-render");
 
@@ -131,26 +127,22 @@ void vtk_paint()
     is_dirty = false;
 }
 
-void vtk_read_state(bool *is_dirty_out, int *width_out, int *height_out)
-{
+void vtk_read_state(bool *is_dirty_out, int *width_out, int *height_out) {
     *is_dirty_out = is_dirty;
     *width_out = window_width;
     *height_out = window_height;
 }
 
-void vtk_mouse_move(int x, int y)
-{
+void vtk_mouse_move(int x, int y) {
     assert(interactor != nullptr);
     interactor->SetEventPosition(x, y);
     interactor->InvokeEvent(vtkCommand::MouseMoveEvent);
 }
 
-void vtk_update_mouse_down(bool primary, bool secondary, bool middle)
-{
+void vtk_update_mouse_down(bool primary, bool secondary, bool middle) {
     assert(interactor != nullptr);
 
-    if (primary_down != primary)
-    {
+    if (primary_down != primary) {
         if (primary)
             interactor->InvokeEvent(vtkCommand::LeftButtonPressEvent);
         else
@@ -159,8 +151,7 @@ void vtk_update_mouse_down(bool primary, bool secondary, bool middle)
         primary_down = primary;
     }
 
-    if (secondary_down != secondary)
-    {
+    if (secondary_down != secondary) {
         if (secondary)
             interactor->InvokeEvent(vtkCommand::RightButtonPressEvent);
         else
@@ -169,8 +160,7 @@ void vtk_update_mouse_down(bool primary, bool secondary, bool middle)
         secondary_down = secondary;
     }
 
-    if (middle_down != middle)
-    {
+    if (middle_down != middle) {
         if (middle)
             interactor->InvokeEvent(vtkCommand::MiddleButtonPressEvent);
         else
@@ -180,24 +170,18 @@ void vtk_update_mouse_down(bool primary, bool secondary, bool middle)
     }
 }
 
-void vtk_mouse_wheel(int delta)
-{
+void vtk_mouse_wheel(int delta) {
     assert(interactor != nullptr);
 
-    if (delta > 0)
-    {
+    if (delta > 0) {
         interactor->InvokeEvent(vtkCommand::MouseWheelForwardEvent);
-    }
-    else if (delta < 0)
-    {
+    } else if (delta < 0) {
         interactor->InvokeEvent(vtkCommand::MouseWheelBackwardEvent);
     }
 }
 
-void vtk_set_size(int width, int height)
-{
-    if (window_width == width && window_height == height)
-    {
+void vtk_set_size(int width, int height) {
+    if (window_width == width && window_height == height) {
         return;
     }
 
