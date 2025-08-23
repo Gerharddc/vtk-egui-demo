@@ -7,6 +7,8 @@ if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 FetchContent_Declare(
     Corrosion
     GIT_REPOSITORY https://github.com/corrosion-rs/corrosion.git
@@ -17,9 +19,12 @@ FetchContent_MakeAvailable(Corrosion)
 find_package(VTK
  COMPONENTS
     CommonCore
+    FiltersCore
+    FiltersSources
     RenderingCore
     InteractionStyle
     RenderingOpenGL2
+    RenderingUI
 )
 
 add_executable(vtk-egui-demo src/vtk_widget.cpp)
@@ -28,8 +33,10 @@ target_include_directories(vtk-egui-demo PRIVATE include)
 
 target_link_libraries(vtk-egui-demo PRIVATE ${VTK_LIBRARIES})
 
-# Windows libraries for Rust
-target_link_libraries(vtk-egui-demo PRIVATE uxtheme Imm32 Dwmapi uiautomationcore oleaut32 propsys RuntimeObject Shlwapi)
+if (WIN32)
+    # Windows libraries for Rust
+    target_link_libraries(fdfd-rs PRIVATE uxtheme Imm32 Dwmapi uiautomationcore oleaut32 propsys RuntimeObject Shlwapi Bcrypt)
+endif()
 
 corrosion_import_crate(MANIFEST_PATH Cargo.toml)
 target_link_libraries(vtk-egui-demo PRIVATE rs_lib)

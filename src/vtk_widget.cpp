@@ -46,7 +46,7 @@ namespace
     GLADapiproc gl_get_proc_address(const char *name)
     {
         assert(gl_loader != nullptr);
-        return static_cast<GLADapiproc>(eframe_gl_loader_get_proc_address(gl_loader, name));
+        return reinterpret_cast<GLADapiproc>(eframe_gl_loader_get_proc_address(gl_loader, name));
     }
 } // end anon namespace
 
